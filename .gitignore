@@ -1,0 +1,8 @@
+.venv/
+.env
+.qwen/
+.claude
+__pycache__/
+
+*.log
+QWEN.md

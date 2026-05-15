@@ -1,0 +1,15 @@
+[Unit]
+Description=Monitoring Camera - CPU, RAM, NPU, and Camera Monitor
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/python3 /home/aibox-vnpay2/apps/monitoring-camera/main.py
+WorkingDirectory=/home/aibox-vnpay2/apps/monitoring-camera
+Restart=always
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
