@@ -8,6 +8,7 @@ load_dotenv()
 
 logger = logging.getLogger(__name__)
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+STATE_FILE = os.path.join(BASE_DIR, "resource_tracker_state.json")
 _json_config_cache = {}
 
 
@@ -133,8 +134,8 @@ BOOT_BODY_TEMPLATE = """
 <h2 style="color:#2563eb;">Máy vừa khởi động lại</h2>
 <table style="border-collapse:collapse;width:100%;max-width:760px;">
   <tr><td style="border:1px solid #ddd;padding:8px;font-weight:bold;">Thiết bị</td><td style="border:1px solid #ddd;padding:8px;">{hostname}</td></tr>
-  <tr><td style="border:1px solid #ddd;padding:8px;font-weight:bold;">Thời gian chết</td><td style="border:1px solid #ddd;padding:8px;color:#b91c1c;font-weight:bold;">{timestamp}</td></tr>
-  <tr><td style="border:1px solid #ddd;padding:8px;font-weight:bold;">Thời gian khởi động lại</td><td style="border:1px solid #ddd;padding:8px;color:#15803d;font-weight:bold;">{boot_time}</td></tr>
+  <tr><td style="border:1px solid #ddd;padding:8px;font-weight:bold;">Thời gian chết</td><td style="border:1px solid #ddd;padding:8px;color:#b91c1c;font-weight:bold;">{last_active_time}</td></tr>
+  <tr><td style="border:1px solid #ddd;padding:8px;font-weight:bold;">Thời gian khởi động lại</td><td style="border:1px solid #ddd;padding:8px;color:#15803d;font-weight:bold;">{timestamp}</td></tr>
 </table>
 </body></html>
 """

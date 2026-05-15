@@ -3,6 +3,8 @@ Monitoring Camera - Main Application
 Monitors CPU and RAM usage and sends email alerts when thresholds are exceeded.
 """
 
+import json
+import os
 import time
 import signal
 import sys
@@ -26,6 +28,22 @@ logging.basicConfig(
 )
 
 logger = logging.getLogger(__name__)
+
+
+def _load_state() -> dict:
+    try:
+        with open(config.STATE_FILE, "r", encoding="utf-8") as f:
+            state = json.load(f)
+        return state if isinstance(state, dict) else {}
+    except (OSError, json.JSONDecodeError):
+        return {}
+
+
+def _save_state(state: dict) -> None:
+    temp_path = f"{config.STATE_FILE}.tmp"
+    with open(temp_path, "w", encoding="utf-8") as f:
+        json.dump(state, f, ensure_ascii=False, indent=2)
+    os.replace(temp_path, config.STATE_FILE)
 
 
 class ResourceTracker:
@@ -128,8 +146,12 @@ class ResourceTracker:
     def send_boot_notification(self):
         hostname = config.DISPLAY_HOSTNAME
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        boot_time = datetime.fromtimestamp(time.time() - time.monotonic()).strftime("%Y-%m-%d %H:%M:%S")
-        self.alert_manager.send_boot_alert(hostname, timestamp, boot_time)
+        last_active_time = _load_state().get("last_active_time", "Không xác định")
+        self.alert_manager.send_boot_alert(hostname, timestamp, last_active_time)
+
+    def update_heartbeat(self):
+        now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        _save_state({"last_active_time": now})
 
     def send_status_notification(self):
         hostname = config.DISPLAY_HOSTNAME
@@ -159,6 +181,7 @@ class ResourceTracker:
             if now >= self.next_status_email:
                 self.send_status_notification()
                 self.next_status_email = now + config.STATUS_EMAIL_INTERVAL_SECONDS
+            self.update_heartbeat()
             logger.info(f"Sleeping for {config.MONITORING_INTERVAL_SECONDS} seconds...")
             time.sleep(config.MONITORING_INTERVAL_SECONDS)
 

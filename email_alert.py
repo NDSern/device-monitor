@@ -35,7 +35,11 @@ class EmailAlert:
             logger.warning("No recipient emails configured. Skipping email send.")
             return False
 
-        msg["To"] = ", ".join(recipients)
+        recipient_header = ", ".join(recipients)
+        if "To" in msg:
+            msg.replace_header("To", recipient_header)
+        else:
+            msg["To"] = recipient_header
 
         server = None
         try:
@@ -94,7 +98,6 @@ class EmailAlert:
         msg = MIMEMultipart("alternative")
         msg["Subject"] = config.EMAIL_SUBJECT_ALERT.format(hostname=hostname)
         msg["From"] = self.sender_email
-        msg["To"] = ", ".join(config.get_recipient_emails())
 
         body = config.EMAIL_BODY_TEMPLATE.format(
             resource_name=resource_name,
@@ -145,7 +148,6 @@ class EmailAlert:
         msg = MIMEMultipart("alternative")
         msg["Subject"] = subject
         msg["From"] = self.sender_email
-        msg["To"] = ", ".join(config.get_recipient_emails())
         msg.attach(MIMEText(body, "html", "utf-8"))
         return self._send_message(msg, f"Status email sent successfully at {timestamp} from {hostname}")
 
@@ -270,11 +272,11 @@ class AlertManager:
             logger.info(f"Camera(s) back online: {back_up}")
             self.send_camera_up_alert(back_up, hostname, timestamp)
 
-    def send_boot_alert(self, hostname: str, timestamp: str, boot_time: str) -> bool:
+    def send_boot_alert(self, hostname: str, timestamp: str, last_active_time: str) -> bool:
         body = config.BOOT_BODY_TEMPLATE.format(
             hostname=hostname,
             timestamp=timestamp,
-            boot_time=boot_time,
+            last_active_time=last_active_time,
         )
         return self.email_alert.send_status_email(config.BOOT_SUBJECT, body, hostname, timestamp)
 

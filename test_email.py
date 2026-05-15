@@ -25,7 +25,10 @@ def send_test_email():
     msg = MIMEMultipart("alternative")
     msg["Subject"] = f"[TEST] Resource Tracker - {hostname}"
     msg["From"] = config.SENDER_EMAIL
-    msg["To"] = recipient
+    if "To" in msg:
+        msg.replace_header("To", recipient)
+    else:
+        msg["To"] = recipient
 
     body = f"""
 Resource Tracker - Test Email
