@@ -8,22 +8,12 @@ import re
 import subprocess
 import psutil
 import logging
+import socket
 from datetime import datetime
 
+import config
+
 logger = logging.getLogger(__name__)
-
-# RKNN NPU debug path (requires root/sudo for debugfs)
-NPU_DEBUG_LOAD_PATH = "/sys/kernel/debug/rknpu/load"
-
-# Fallback: devfreq path (aggregate load only, no per-core breakdown)
-NPU_DEVFREQ_LOAD_PATH = "/sys/devices/platform/fdab0000.npu/devfreq/fdab0000.npu/load"
-
-# Legacy per-core sysfs paths (older kernels/drivers)
-NPU_LEGACY_LOAD_PATHS = [
-    "/sys/class/misc/rknpu/load0",
-    "/sys/class/misc/rknpu/load1",
-    "/sys/class/misc/rknpu/load2",
-]
 
 
 class ResourceMonitor:
@@ -66,18 +56,26 @@ class ResourceMonitor:
             list or None: List of per-core usage floats, or None on failure.
         """
         try:
-            result = subprocess.run(
-                ["sudo", "cat", NPU_DEBUG_LOAD_PATH],
-                capture_output=True, text=True, timeout=5,
-            )
-            if result.returncode != 0:
+            with open(config.NPU_DEBUG_LOAD_PATH, "r") as f:
+                output = f.read()
+        except (IOError, PermissionError) as e:
+            logger.debug(f"Failed to read NPU debug load directly: {e}")
+            try:
+                result = subprocess.run(
+                    ["sudo", "-n", "cat", config.NPU_DEBUG_LOAD_PATH],
+                    capture_output=True, text=True, timeout=5,
+                )
+                if result.returncode != 0:
+                    return None
+                output = result.stdout
+            except (subprocess.TimeoutExpired, FileNotFoundError, OSError) as e:
+                logger.debug(f"Failed to read NPU debug load via sudo: {e}")
                 return None
-            # Parse "Core0: 68%, Core1: 71%, Core2:  0%,"
-            matches = re.findall(r"Core\d+:\s*(\d+)%", result.stdout)
-            if matches:
-                return [float(v) for v in matches]
-        except (subprocess.TimeoutExpired, FileNotFoundError, OSError) as e:
-            logger.debug(f"Failed to read NPU debug load: {e}")
+
+        # Parse "Core0: 68%, Core1: 71%, Core2:  0%,"
+        matches = re.findall(r"Core\d+:\s*(\d+)%", output)
+        if matches:
+            return [float(v) for v in matches]
         return None
 
     @staticmethod
@@ -88,10 +86,10 @@ class ResourceMonitor:
         Returns:
             list or None: List of per-core usage floats, or None if paths don't exist.
         """
-        if not os.path.exists(NPU_LEGACY_LOAD_PATHS[0]):
+        if not config.NPU_LEGACY_CORE_PATHS or not os.path.exists(config.NPU_LEGACY_CORE_PATHS[0]):
             return None
         usage = []
-        for path in NPU_LEGACY_LOAD_PATHS:
+        for path in config.NPU_LEGACY_CORE_PATHS:
             try:
                 with open(path, "r") as f:
                     usage.append(float(int(f.read().strip())))
@@ -111,8 +109,8 @@ class ResourceMonitor:
             list or None: Single-element list with aggregate usage, or None on failure.
         """
         try:
-            if os.path.exists(NPU_DEVFREQ_LOAD_PATH):
-                with open(NPU_DEVFREQ_LOAD_PATH, "r") as f:
+            if os.path.exists(config.NPU_DEVFREQ_LOAD_PATH):
+                with open(config.NPU_DEVFREQ_LOAD_PATH, "r") as f:
                     content = f.read().strip()
                     # Format: "50@1000000000Hz"
                     load = int(content.split("@")[0])
@@ -170,7 +168,7 @@ class ResourceMonitor:
         """
         memory = psutil.virtual_memory()
         return {
-            "hostname": psutil.Process().pid,  # Will be replaced with socket hostname
+            "hostname": socket.gethostname(),
             "cpu_count": psutil.cpu_count(),
             "total_ram_gb": round(memory.total / (1024**3), 2),
             "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
@@ -183,8 +181,6 @@ class ResourceMonitor:
         Returns:
             dict: Resource usage data with CPU, RAM, and NPU percentages
         """
-        import socket
-
         cpu_usage = self.get_cpu_usage()
         ram_usage = self.get_ram_usage()
         npu_usage = self.get_npu_usage()

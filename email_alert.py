@@ -5,6 +5,7 @@ Sends email warnings when system resources exceed defined thresholds.
 
 import smtplib
 import logging
+import time
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from datetime import datetime
@@ -23,13 +24,20 @@ class EmailAlert:
         self.use_tls = config.EMAIL_USE_TLS
         self.sender_email = config.SENDER_EMAIL
         self.sender_password = config.SENDER_PASSWORD
-        self.recipients = config.RECIPIENT_EMAILS
 
     def _send_message(self, msg: MIMEMultipart, success_message: str) -> bool:
         if not config.EMAIL_ENABLED:
             logger.info("Email alerts are disabled. Skipping.")
             return False
 
+        recipients = config.get_recipient_emails()
+        if not recipients:
+            logger.warning("No recipient emails configured. Skipping email send.")
+            return False
+
+        msg["To"] = ", ".join(recipients)
+
+        server = None
         try:
             logger.info(f"Connecting to SMTP server {self.smtp_server}:{self.smtp_port}")
             if self.use_tls:
@@ -39,8 +47,7 @@ class EmailAlert:
                 server = smtplib.SMTP_SSL(self.smtp_server, self.smtp_port)
 
             server.login(self.sender_email, self.sender_password)
-            server.sendmail(self.sender_email, self.recipients, msg.as_string())
-            server.quit()
+            server.sendmail(self.sender_email, recipients, msg.as_string())
 
             logger.info(success_message)
             return True
@@ -54,6 +61,12 @@ class EmailAlert:
         except Exception as e:
             logger.error(f"Failed to send email alert: {e}")
             return False
+        finally:
+            if server is not None:
+                try:
+                    server.quit()
+                except smtplib.SMTPException:
+                    logger.debug("Failed to close SMTP connection cleanly")
 
     def _create_alert_message(self, resource_name: str, usage: float, threshold: float,
                               hostname: str, timestamp: str,
@@ -81,7 +94,7 @@ class EmailAlert:
         msg = MIMEMultipart("alternative")
         msg["Subject"] = config.EMAIL_SUBJECT_ALERT.format(hostname=hostname)
         msg["From"] = self.sender_email
-        msg["To"] = ", ".join(self.recipients)
+        msg["To"] = ", ".join(config.get_recipient_emails())
 
         body = config.EMAIL_BODY_TEMPLATE.format(
             resource_name=resource_name,
@@ -132,7 +145,7 @@ class EmailAlert:
         msg = MIMEMultipart("alternative")
         msg["Subject"] = subject
         msg["From"] = self.sender_email
-        msg["To"] = ", ".join(self.recipients)
+        msg["To"] = ", ".join(config.get_recipient_emails())
         msg.attach(MIMEText(body, "html", "utf-8"))
         return self._send_message(msg, f"Status email sent successfully at {timestamp} from {hostname}")
 
@@ -165,15 +178,28 @@ class AlertManager:
             bool: True if alert was sent, False otherwise
         """
         if usage >= threshold:
+            now = time.monotonic()
+            last_alert_time = self.alert_cooldowns.get(resource_name)
+            if last_alert_time is not None and now - last_alert_time < config.ALERT_COOLDOWN_SECONDS:
+                logger.warning(
+                    f"ALERT SUPPRESSED: {resource_name} usage at {usage:.1f}% "
+                    f"(threshold: {threshold}%, cooldown active)"
+                )
+                return False
+
             logger.warning(
                 f"ALERT: {resource_name} usage at {usage:.1f}% "
                 f"(threshold: {threshold}%)"
             )
-            return self.email_alert.send_alert(
+            sent = self.email_alert.send_alert(
                 resource_name, usage, threshold, hostname, timestamp,
                 cpu_usage, ram_usage, npu_usage
             )
+            if sent:
+                self.alert_cooldowns[resource_name] = now
+            return sent
         else:
+            self.alert_cooldowns.pop(resource_name, None)
             logger.debug(f"{resource_name} usage normal: {usage:.1f}%")
             return False
 
@@ -189,10 +215,11 @@ class AlertManager:
         )
 
     def _format_all_camera_rows(self, changed: list[tuple[str, str]] | None = None) -> str:
+        cameras = config.get_cameras()
         changed_ips = {ip for ip, _ in (changed or [])}
         return "".join(
             self._camera_row(ip, name, self.camera_status.get(ip, True), ip in changed_ips)
-            for ip, name in config.CAMERAS.items()
+            for ip, name in cameras.items()
         )
 
     def send_camera_down_alert(self, cameras: list[tuple[str, str]], hostname: str, timestamp: str) -> bool:
@@ -212,11 +239,16 @@ class AlertManager:
         return self.email_alert.send_status_email(config.CAMERA_UP_SUBJECT, body, hostname, timestamp)
 
     def check_camera_transitions(self, unreachable: list[tuple[str, str]], hostname: str, timestamp: str) -> None:
+        cameras = config.get_cameras()
+        stale_ips = set(self.camera_status) - set(cameras)
+        for ip in stale_ips:
+            del self.camera_status[ip]
+
         unreachable_ips = {ip for ip, _ in unreachable}
         newly_down = []
         back_up = []
 
-        for ip, name in config.CAMERAS.items():
+        for ip, name in cameras.items():
             is_online = ip not in unreachable_ips
             was_online = self.camera_status.get(ip)
 

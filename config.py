@@ -1,8 +1,61 @@
 # Resource Tracker Configuration
+import json
+import logging
 import os
 from dotenv import load_dotenv
 
 load_dotenv()
+
+logger = logging.getLogger(__name__)
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+_json_config_cache = {}
+
+
+def _validate_string_list(value):
+    return isinstance(value, list) and all(isinstance(item, str) for item in value)
+
+
+def _validate_string_dict(value):
+    return (
+        isinstance(value, dict)
+        and all(isinstance(key, str) and isinstance(item, str) for key, item in value.items())
+    )
+
+
+def _load_json_config(filename, default, validator):
+    path = os.path.join(BASE_DIR, filename)
+    cached = _json_config_cache.get(filename)
+
+    try:
+        mtime = os.path.getmtime(path)
+    except OSError as e:
+        logger.warning(f"Failed to stat {filename}: {e}. Using last valid config.")
+        return cached["value"] if cached else default.copy()
+
+    if cached and cached["mtime"] == mtime:
+        return cached["value"]
+
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            value = json.load(f)
+    except (OSError, json.JSONDecodeError) as e:
+        logger.warning(f"Failed to load {filename}: {e}. Using last valid config.")
+        return cached["value"] if cached else default.copy()
+
+    if not validator(value):
+        logger.warning(f"Invalid shape in {filename}. Using last valid config.")
+        return cached["value"] if cached else default.copy()
+
+    _json_config_cache[filename] = {"mtime": mtime, "value": value}
+    return value
+
+
+def get_recipient_emails():
+    return _load_json_config("recipient_emails.json", [], _validate_string_list)
+
+
+def get_cameras():
+    return _load_json_config("cameras.json", {}, _validate_string_dict)
 
 # Monitoring Settings
 MONITORING_INTERVAL_SECONDS = 60
@@ -10,18 +63,11 @@ CAMERA_PING_INTERVAL_SECONDS = 10 * 60
 CPU_THRESHOLD = 70  # percent
 RAM_THRESHOLD = 70  # percentsondn
 NPU_THRESHOLD = 90  # percent (per core)
+ALERT_COOLDOWN_SECONDS = 30 * 60
 STATUS_EMAIL_INTERVAL_SECONDS = 6 * 60 * 60
 DISPLAY_HOSTNAME = "AIBOX Cảng Gia Vũ - Hải Phòng"
 
-CAMERAS = {
-    "192.168.1.103": "Cam nhìn băng truyền",
-    "192.168.1.34": "Cam nhìn cẩu hành từ tàu",
-    "192.168.1.101": "Cam nhìn khoang hàng trên xe",
-    "192.168.1.105": "Cam nhìn cao trên cân",
-    "192.168.1.102": "Cam nhìn tréo cân",
-    "192.168.1.107": "Cam nhìn biển xe trên cân 1",
-    "192.168.1.100": "Cam nhìn biển xe trên cân 2",
-}
+CAMERAS = get_cameras()
 
 # Email Settings
 EMAIL_ENABLED = True
@@ -30,10 +76,7 @@ SMTP_PORT = 587  # Use 465 for SSL, 587 for TLS
 EMAIL_USE_TLS = True
 SENDER_EMAIL = os.getenv("SENDER_EMAIL", "")
 SENDER_PASSWORD = os.getenv("SENDER_PASSWORD", "")
-RECIPIENT_EMAILS = [
-    "sondn@vns.ai.vn",
-    "huylq@vns.ai.vn",
-]
+RECIPIENT_EMAILS = get_recipient_emails()
 
 # Email Content
 EMAIL_SUBJECT_ALERT = "[CẢNH BÁO] Tài nguyên vượt ngưỡng - AIBOX Cảng Gia Vũ - Hải Phòng"

@@ -12,7 +12,7 @@ import subprocess
 from datetime import datetime
 
 from monitor import ResourceMonitor
-from email_alert import AlertManager
+from email_alert import AlertManager, build_status_body
 import config
 
 # Configure logging
@@ -36,6 +36,7 @@ class ResourceTracker:
         self.alert_manager = AlertManager()
         self.running = False
         self.next_camera_check = 0
+        self.next_status_email = time.monotonic() + config.STATUS_EMAIL_INTERVAL_SECONDS
 
     def check_resources(self):
         """Check system resources and send alerts if thresholds are exceeded."""
@@ -111,9 +112,10 @@ class ResourceTracker:
         hostname = config.DISPLAY_HOSTNAME
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         unreachable = []
+        cameras = config.get_cameras()
 
         logger.info("Checking camera connectivity...")
-        for ip_address, camera_name in config.CAMERAS.items():
+        for ip_address, camera_name in cameras.items():
             if self._ping_camera(ip_address):
                 logger.info(f"Camera online: {camera_name} ({ip_address})")
             else:
@@ -128,6 +130,12 @@ class ResourceTracker:
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         boot_time = datetime.fromtimestamp(time.time() - time.monotonic()).strftime("%Y-%m-%d %H:%M:%S")
         self.alert_manager.send_boot_alert(hostname, timestamp, boot_time)
+
+    def send_status_notification(self):
+        hostname = config.DISPLAY_HOSTNAME
+        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        body = build_status_body(self.alert_manager, hostname, timestamp)
+        self.alert_manager.email_alert.send_status_email(config.STATUS_SUBJECT, body, hostname, timestamp)
 
     def run(self):
         """Start the monitoring loop."""
@@ -148,6 +156,9 @@ class ResourceTracker:
             if now >= self.next_camera_check:
                 self.check_cameras()
                 self.next_camera_check = now + config.CAMERA_PING_INTERVAL_SECONDS
+            if now >= self.next_status_email:
+                self.send_status_notification()
+                self.next_status_email = now + config.STATUS_EMAIL_INTERVAL_SECONDS
             logger.info(f"Sleeping for {config.MONITORING_INTERVAL_SECONDS} seconds...")
             time.sleep(config.MONITORING_INTERVAL_SECONDS)
 
@@ -155,6 +166,7 @@ class ResourceTracker:
         """Stop the monitoring loop."""
         self.running = False
         self.next_camera_check = 0
+        self.next_status_email = 0
         logger.info("Monitoring Camera stopped.")
 
 

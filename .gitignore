@@ -6,3 +6,9 @@ __pycache__/
 
 *.log
 QWEN.md
+AGENTS.md
+CLAUDE.md
+.gitnexus
+
+cameras.json
+recipient_emails.json
