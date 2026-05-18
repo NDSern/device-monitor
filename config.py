@@ -78,6 +78,7 @@ EMAIL_USE_TLS = True
 SENDER_EMAIL = os.getenv("SENDER_EMAIL", "")
 SENDER_PASSWORD = os.getenv("SENDER_PASSWORD", "")
 RECIPIENT_EMAILS = get_recipient_emails()
+EMAIL_SEND_RETRY_DELAYS_SECONDS = [10, 30, 60]
 
 # Email Content
 EMAIL_SUBJECT_ALERT = "[CẢNH BÁO] Tài nguyên vượt ngưỡng - AIBOX Cảng Gia Vũ - Hải Phòng"

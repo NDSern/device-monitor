@@ -5,6 +5,7 @@ Sends email warnings when system resources exceed defined thresholds.
 
 import smtplib
 import logging
+import socket
 import time
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
@@ -13,6 +14,14 @@ from datetime import datetime
 import config
 
 logger = logging.getLogger(__name__)
+
+TRANSIENT_EMAIL_ERRORS = (
+    socket.gaierror,
+    TimeoutError,
+    OSError,
+    smtplib.SMTPConnectError,
+    smtplib.SMTPServerDisconnected,
+)
 
 
 class EmailAlert:
@@ -41,36 +50,55 @@ class EmailAlert:
         else:
             msg["To"] = recipient_header
 
-        server = None
-        try:
-            logger.info(f"Connecting to SMTP server {self.smtp_server}:{self.smtp_port}")
-            if self.use_tls:
-                server = smtplib.SMTP(self.smtp_server, self.smtp_port)
-                server.starttls()
-            else:
-                server = smtplib.SMTP_SSL(self.smtp_server, self.smtp_port)
+        retry_delays = getattr(config, "EMAIL_SEND_RETRY_DELAYS_SECONDS", [])
+        total_attempts = len(retry_delays) + 1
 
-            server.login(self.sender_email, self.sender_password)
-            server.sendmail(self.sender_email, recipients, msg.as_string())
+        for attempt in range(1, total_attempts + 1):
+            server = None
+            try:
+                logger.info(
+                    f"Connecting to SMTP server {self.smtp_server}:{self.smtp_port} "
+                    f"(attempt {attempt}/{total_attempts})"
+                )
+                if self.use_tls:
+                    server = smtplib.SMTP(self.smtp_server, self.smtp_port, timeout=30)
+                    server.starttls()
+                else:
+                    server = smtplib.SMTP_SSL(self.smtp_server, self.smtp_port, timeout=30)
 
-            logger.info(success_message)
-            return True
+                server.login(self.sender_email, self.sender_password)
+                server.sendmail(self.sender_email, recipients, msg.as_string())
 
-        except smtplib.SMTPAuthenticationError as e:
-            logger.error(f"SMTP authentication failed: {e}")
-            return False
-        except smtplib.SMTPException as e:
-            logger.error(f"SMTP error occurred: {e}")
-            return False
-        except Exception as e:
-            logger.error(f"Failed to send email alert: {e}")
-            return False
-        finally:
-            if server is not None:
-                try:
-                    server.quit()
-                except smtplib.SMTPException:
-                    logger.debug("Failed to close SMTP connection cleanly")
+                logger.info(success_message)
+                return True
+
+            except smtplib.SMTPAuthenticationError as e:
+                logger.error(f"SMTP authentication failed: {e}")
+                return False
+            except TRANSIENT_EMAIL_ERRORS as e:
+                if attempt >= total_attempts:
+                    logger.error(f"Failed to send email alert after {attempt} attempts: {e}")
+                    return False
+                delay = retry_delays[attempt - 1]
+                logger.warning(
+                    f"Email send attempt {attempt}/{total_attempts} failed: {e}. "
+                    f"Retrying in {delay}s."
+                )
+                time.sleep(delay)
+            except smtplib.SMTPException as e:
+                logger.error(f"SMTP error occurred: {e}")
+                return False
+            except Exception as e:
+                logger.error(f"Failed to send email alert: {e}")
+                return False
+            finally:
+                if server is not None:
+                    try:
+                        server.quit()
+                    except smtplib.SMTPException:
+                        logger.debug("Failed to close SMTP connection cleanly")
+
+        return False
 
     def _create_alert_message(self, resource_name: str, usage: float, threshold: float,
                               hostname: str, timestamp: str,
