@@ -4,8 +4,8 @@ After=network.target
 
 [Service]
 Type=simple
-ExecStart=/usr/bin/python3 /home/aibox-vnpay2/apps/monitoring-camera/main.py
-WorkingDirectory=/home/aibox-vnpay2/apps/monitoring-camera
+ExecStart=/usr/bin/python3 /home/example_user/apps/device-monitor/main.py
+WorkingDirectory=/home/example_user/apps/device-monitor
 Restart=always
 RestartSec=10
 StandardOutput=journal
