@@ -1,84 +1,74 @@
 # Monitoring Camera
 
-Python service that monitors CPU, RAM, NPU, and configured cameras. It sends SMTP email alerts for resource threshold breaches, camera down/up transitions, boot events, and periodic status reports.
+Dịch vụ Python dùng để giám sát CPU, RAM, NPU và danh sách camera đã cấu hình. Ứng dụng gửi email SMTP khi tài nguyên vượt ngưỡng, camera mất/kết nối lại, thiết bị khởi động lại, và gửi báo cáo trạng thái định kỳ.
 
-## Features
+## Tính Năng
 
-- **Resource monitoring**: Tracks CPU, RAM, and RKNN NPU usage.
-- **Camera monitoring**: Pings configured cameras and alerts only on down/up transitions.
-- **Email alerts**: Sends HTML SMTP notifications for resource alerts, camera status changes, boot events, and periodic status reports.
-- **Alert cooldowns**: Repeats persistent high-usage alerts at most once per resource cooldown window.
-- **Hot-reload JSON config**: Reloads camera and recipient lists without restarting the service.
-- **Logging**: Writes checks and alerts to `resource_tracker.log`.
+- **Giám sát tài nguyên**: Theo dõi CPU, RAM và mức tải RKNN NPU.
+- **Giám sát camera**: Ping các camera đã cấu hình và chỉ cảnh báo khi trạng thái chuyển từ online sang offline hoặc ngược lại.
+- **Giám sát aibox**: Ping các aibox đã cấu hình và cảnh báo khi aibox chuyển trạng thái từ online sang offline hoặc ngược lại.
+- **Cảnh báo email**: Gửi email HTML cho cảnh báo tài nguyên, thay đổi trạng thái camera, sự kiện khởi động lại và báo cáo định kỳ.
+- **Giới hạn lặp cảnh báo**: Với tài nguyên vẫn vượt ngưỡng, mỗi tài nguyên chỉ gửi lại cảnh báo sau khoảng cooldown.
+- **Cấu hình JSON hot-reload**: Tự đọc lại danh sách camera, người nhận email và tên thiết bị mà không cần khởi động lại dịch vụ.
+- **Ghi log**: Ghi toàn bộ lần kiểm tra và cảnh báo vào `resource_tracker.log`.
 
-## Project Structure
+## Cho Người Giám Sát
 
-```text
-monitoring-camera/
-├── main.py                 # Main service loop
-├── monitor.py              # CPU, RAM, and NPU monitoring
-├── email_alert.py          # Email alerts and camera transition state
-├── config/                 # Static config module and hot-reloaded JSON files
-│   ├── config.py           # Static settings and JSON config loaders
-│   ├── device_name.json    # Hot-reloaded display device name
-│   ├── cameras.json        # Hot-reloaded camera IP/name map
-│   └── recipient_emails.json # Hot-reloaded recipient list
-├── test_email.py           # Manual SMTP test script
-├── requirements.txt        # Python dependencies
-└── resource_tracker.log    # Runtime log file
-```
+[Doc Cho Team Giám Sát](https://vnscorporation-my.sharepoint.com/:w:/g/personal/sondn_vns_ai_vn/IQAwJua1lXNpRaaAwkkFxp5_ARXw7ijjgKObLp9VEazuJeg?e=aoco1a)
 
-## Installation
+## Cho Repo Maintainer
+
+### Cài Đặt
 
 ```bash
 pip install -r requirements.txt
 ```
 
-Create `.env` with SMTP credentials:
+Tạo file `.env` chứa thông tin đăng nhập SMTP:
 
 ```bash
 SENDER_EMAIL=your-email@example.com
 SENDER_PASSWORD=your-password-or-app-password
 ```
 
-## Usage
+### Sử Dụng
 
-Run service:
+Chạy dịch vụ:
 
 ```bash
 python main.py
 ```
 
-Run SMTP smoke test:
+Gửi email kiểm tra SMTP:
 
 ```bash
 python test_email.py
 ```
 
-Stop service with `Ctrl+C`.
+Dừng dịch vụ bằng `Ctrl+C`.
 
-## Configuration
+### Cấu Hình
 
-Static settings live in `config/config.py`.
+Các thiết lập tĩnh nằm trong `config/config.py`.
 
-| Setting | Current Default | Description |
-|---------|-----------------|-------------|
-| `MONITORING_INTERVAL_SECONDS` | `60` | Seconds between resource checks |
-| `CAMERA_PING_INTERVAL_SECONDS` | `600` | Seconds between camera ping checks |
-| `CPU_THRESHOLD` | `70` | CPU alert threshold (%) |
-| `RAM_THRESHOLD` | `70` | RAM alert threshold (%) |
-| `NPU_THRESHOLD` | `90` | NPU per-core alert threshold (%) |
-| `ALERT_COOLDOWN_SECONDS` | `1800` | Minimum seconds between repeated alerts for same resource |
-| `STATUS_EMAIL_INTERVAL_SECONDS` | `21600` | Seconds between periodic status reports |
-| `EMAIL_ENABLED` | `True` | Enable/disable email sends |
-| `SMTP_SERVER` | `smtp.office365.com` | SMTP server address |
-| `SMTP_PORT` | `587` | SMTP port |
-| `EMAIL_USE_TLS` | `True` | Use SMTP + STARTTLS when true, SMTP_SSL when false |
+| Thiết lập | Giá trị mặc định | Mô tả |
+|-----------|------------------|-------|
+| `MONITORING_INTERVAL_SECONDS` | `60` | Số giây giữa các lần kiểm tra tài nguyên |
+| `CAMERA_PING_INTERVAL_SECONDS` | `600` | Số giây giữa các lần ping camera |
+| `CPU_THRESHOLD` | `70` | Ngưỡng cảnh báo CPU (%) |
+| `RAM_THRESHOLD` | `70` | Ngưỡng cảnh báo RAM (%) |
+| `NPU_THRESHOLD` | `90` | Ngưỡng cảnh báo từng core NPU (%) |
+| `ALERT_COOLDOWN_SECONDS` | `1800` | Thời gian tối thiểu giữa các email cảnh báo lặp lại cho cùng một tài nguyên |
+| `STATUS_EMAIL_INTERVAL_SECONDS` | `21600` | Số giây giữa các email báo cáo trạng thái định kỳ |
+| `EMAIL_ENABLED` | `True` | Bật/tắt gửi email |
+| `SMTP_SERVER` | `smtp.office365.com` | Địa chỉ SMTP server |
+| `SMTP_PORT` | `587` | Cổng SMTP |
+| `EMAIL_USE_TLS` | `True` | `True` dùng SMTP + STARTTLS, `False` dùng SMTP_SSL |
 
-## Hot-Reload JSON Files
+### File JSON Hot-Reload
 
-Edit `recipient_emails.json` to change email recipients without restart:
-Path: `config/recipient_emails.json`
+Sửa `recipient_emails.json` để thay đổi danh sách người nhận email mà không cần khởi động lại:
+Đường dẫn: `config/recipient_emails.json`
 
 ```json
 [
@@ -87,8 +77,8 @@ Path: `config/recipient_emails.json`
 ]
 ```
 
-Edit `cameras.json` to change monitored cameras without restart:
-Path: `config/cameras.json`
+Sửa `cameras.json` để thay đổi danh sách camera giám sát mà không cần khởi động lại:
+Đường dẫn: `config/cameras.json`
 
 ```json
 {
@@ -97,9 +87,9 @@ Path: `config/cameras.json`
 }
 ```
 
-Edit `device_name.json` to change the display device name without restart:
+Sửa `device_name.json` để thay đổi tên thiết bị hiển thị mà không cần khởi động lại:
 
-Path: `config/device_name.json`
+Đường dẫn: `config/device_name.json`
 
 ```json
 {
@@ -107,23 +97,23 @@ Path: `config/device_name.json`
 }
 ```
 
-If a JSON file is temporarily invalid while being edited, the service logs a warning and keeps using the last valid version. When the file becomes valid again, the next check/email send reloads it.
+Nếu một file JSON tạm thời không hợp lệ trong lúc đang sửa, dịch vụ sẽ ghi cảnh báo vào log và tiếp tục dùng phiên bản hợp lệ gần nhất. Khi file hợp lệ trở lại, lần kiểm tra hoặc lần gửi email tiếp theo sẽ tự đọc lại nội dung mới.
 
-When a camera is removed from `config/cameras.json`, stale in-memory camera status for that IP is pruned on the next camera transition check.
+Khi một camera bị xóa khỏi `config/cameras.json`, trạng thái camera cũ trong bộ nhớ sẽ được xóa ở lần kiểm tra chuyển trạng thái camera tiếp theo.
 
-## NPU Load Sources
+### Nguồn Đọc Tải NPU
 
-NPU usage is read in this order:
+Ứng dụng đọc mức tải NPU theo thứ tự sau:
 
-1. `NPU_DEBUG_LOAD_PATH` direct read, then `sudo -n cat` fallback
-2. `NPU_LEGACY_CORE_PATHS` per-core sysfs paths
-3. `NPU_DEVFREQ_LOAD_PATH` aggregate load replicated across 3 cores
+1. Đọc trực tiếp `NPU_DEBUG_LOAD_PATH`, sau đó fallback sang `sudo -n cat`.
+2. Đọc từng core từ `NPU_LEGACY_CORE_PATHS`.
+3. Đọc tải tổng từ `NPU_DEVFREQ_LOAD_PATH` và nhân ra 3 core.
 
-If no NPU source is available, usage falls back to `[0.0, 0.0, 0.0]`.
+Nếu không đọc được nguồn NPU nào, giá trị tải sẽ fallback về `[0.0, 0.0, 0.0]`.
 
-## Logs
+### Log
 
-All activity is logged to `resource_tracker.log`. Example:
+Toàn bộ hoạt động được ghi vào `resource_tracker.log`. Ví dụ:
 
 ```text
 2026-04-15 10:30:00 - monitor - INFO - CPU Usage: 45.2%
