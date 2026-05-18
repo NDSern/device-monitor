@@ -174,7 +174,7 @@ class EmailAlert:
 
     def send_status_email(self, subject: str, body: str, hostname: str, timestamp: str) -> bool:
         msg = MIMEMultipart("alternative")
-        msg["Subject"] = subject
+        msg["Subject"] = subject.format(hostname=hostname)
         msg["From"] = self.sender_email
         msg.attach(MIMEText(body, "html", "utf-8"))
         return self._send_message(msg, f"Status email sent successfully at {timestamp} from {hostname}")

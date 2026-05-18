@@ -18,9 +18,11 @@ monitoring-camera/
 ├── main.py                 # Main service loop
 ├── monitor.py              # CPU, RAM, and NPU monitoring
 ├── email_alert.py          # Email alerts and camera transition state
-├── config.py               # Static settings and JSON config loaders
-├── cameras.json            # Hot-reloaded camera IP/name map
-├── recipient_emails.json   # Hot-reloaded recipient list
+├── config/                 # Static config module and hot-reloaded JSON files
+│   ├── config.py           # Static settings and JSON config loaders
+│   ├── device_name.json    # Hot-reloaded display device name
+│   ├── cameras.json        # Hot-reloaded camera IP/name map
+│   └── recipient_emails.json # Hot-reloaded recipient list
 ├── test_email.py           # Manual SMTP test script
 ├── requirements.txt        # Python dependencies
 └── resource_tracker.log    # Runtime log file
@@ -57,7 +59,7 @@ Stop service with `Ctrl+C`.
 
 ## Configuration
 
-Static settings live in `config.py`.
+Static settings live in `config/config.py`.
 
 | Setting | Current Default | Description |
 |---------|-----------------|-------------|
@@ -76,6 +78,7 @@ Static settings live in `config.py`.
 ## Hot-Reload JSON Files
 
 Edit `recipient_emails.json` to change email recipients without restart:
+Path: `config/recipient_emails.json`
 
 ```json
 [
@@ -85,6 +88,7 @@ Edit `recipient_emails.json` to change email recipients without restart:
 ```
 
 Edit `cameras.json` to change monitored cameras without restart:
+Path: `config/cameras.json`
 
 ```json
 {
@@ -93,9 +97,19 @@ Edit `cameras.json` to change monitored cameras without restart:
 }
 ```
 
+Edit `device_name.json` to change the display device name without restart:
+
+Path: `config/device_name.json`
+
+```json
+{
+  "device_name": "AIBOX Cảng Gia Vũ - Hải Phòng"
+}
+```
+
 If a JSON file is temporarily invalid while being edited, the service logs a warning and keeps using the last valid version. When the file becomes valid again, the next check/email send reloads it.
 
-When a camera is removed from `cameras.json`, stale in-memory camera status for that IP is pruned on the next camera transition check.
+When a camera is removed from `config/cameras.json`, stale in-memory camera status for that IP is pruned on the next camera transition check.
 
 ## NPU Load Sources
 

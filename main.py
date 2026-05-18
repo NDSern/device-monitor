@@ -62,7 +62,7 @@ class ResourceTracker:
 
         try:
             resources = self.monitor.check_resources()
-            hostname = config.DISPLAY_HOSTNAME
+            hostname = config.get_device_name()
             timestamp = resources["timestamp"]
 
             # Check CPU usage
@@ -127,7 +127,7 @@ class ResourceTracker:
             return False
 
     def check_cameras(self):
-        hostname = config.DISPLAY_HOSTNAME
+        hostname = config.get_device_name()
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         unreachable = []
         cameras = config.get_cameras()
@@ -144,7 +144,7 @@ class ResourceTracker:
         logger.info("Camera check complete")
 
     def send_boot_notification(self):
-        hostname = config.DISPLAY_HOSTNAME
+        hostname = config.get_device_name()
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         last_active_time = _load_state().get("last_active_time", "Không xác định")
         self.alert_manager.send_boot_alert(hostname, timestamp, last_active_time)
@@ -154,7 +154,7 @@ class ResourceTracker:
         _save_state({"last_active_time": now})
 
     def send_status_notification(self):
-        hostname = config.DISPLAY_HOSTNAME
+        hostname = config.get_device_name()
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         body = build_status_body(self.alert_manager, hostname, timestamp)
         self.alert_manager.email_alert.send_status_email(config.STATUS_SUBJECT, body, hostname, timestamp)

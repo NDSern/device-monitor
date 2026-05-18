@@ -10,5 +10,7 @@ AGENTS.md
 CLAUDE.md
 .gitnexus
 
-cameras.json
-recipient_emails.json
+config/device_name.json
+config/cameras.json
+config/recipient_emails.json
+config/resource_tracker_state.json

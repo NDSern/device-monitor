@@ -12,6 +12,18 @@ STATE_FILE = os.path.join(BASE_DIR, "resource_tracker_state.json")
 _json_config_cache = {}
 
 
+def _validate_string(value):
+    return isinstance(value, str)
+
+
+def _validate_device_config(value):
+    return (
+        isinstance(value, dict)
+        and isinstance(value.get("device_name"), str)
+        and bool(value["device_name"].strip())
+    )
+
+
 def _validate_string_list(value):
     return isinstance(value, list) and all(isinstance(item, str) for item in value)
 
@@ -23,6 +35,10 @@ def _validate_string_dict(value):
     )
 
 
+def _copy_default(default):
+    return default.copy() if hasattr(default, "copy") else default
+
+
 def _load_json_config(filename, default, validator):
     path = os.path.join(BASE_DIR, filename)
     cached = _json_config_cache.get(filename)
@@ -31,7 +47,7 @@ def _load_json_config(filename, default, validator):
         mtime = os.path.getmtime(path)
     except OSError as e:
         logger.warning(f"Failed to stat {filename}: {e}. Using last valid config.")
-        return cached["value"] if cached else default.copy()
+        return cached["value"] if cached else _copy_default(default)
 
     if cached and cached["mtime"] == mtime:
         return cached["value"]
@@ -41,14 +57,23 @@ def _load_json_config(filename, default, validator):
             value = json.load(f)
     except (OSError, json.JSONDecodeError) as e:
         logger.warning(f"Failed to load {filename}: {e}. Using last valid config.")
-        return cached["value"] if cached else default.copy()
+        return cached["value"] if cached else _copy_default(default)
 
     if not validator(value):
         logger.warning(f"Invalid shape in {filename}. Using last valid config.")
-        return cached["value"] if cached else default.copy()
+        return cached["value"] if cached else _copy_default(default)
 
     _json_config_cache[filename] = {"mtime": mtime, "value": value}
     return value
+
+
+def get_device_name():
+    config_data = _load_json_config(
+        "device_name.json",
+        {"device_name": "Unknown Device"},
+        _validate_device_config,
+    )
+    return config_data["device_name"]
 
 
 def get_recipient_emails():
@@ -58,6 +83,7 @@ def get_recipient_emails():
 def get_cameras():
     return _load_json_config("cameras.json", {}, _validate_string_dict)
 
+
 # Monitoring Settings
 MONITORING_INTERVAL_SECONDS = 60
 CAMERA_PING_INTERVAL_SECONDS = 10 * 60
@@ -66,7 +92,7 @@ RAM_THRESHOLD = 70  # percentsondn
 NPU_THRESHOLD = 90  # percent (per core)
 ALERT_COOLDOWN_SECONDS = 30 * 60
 STATUS_EMAIL_INTERVAL_SECONDS = 6 * 60 * 60
-DISPLAY_HOSTNAME = "AIBOX Cảng Gia Vũ - Hải Phòng"
+DISPLAY_HOSTNAME = get_device_name()
 
 CAMERAS = get_cameras()
 
@@ -81,7 +107,7 @@ RECIPIENT_EMAILS = get_recipient_emails()
 EMAIL_SEND_RETRY_DELAYS_SECONDS = [10, 30, 60]
 
 # Email Content
-EMAIL_SUBJECT_ALERT = "[CẢNH BÁO] Tài nguyên vượt ngưỡng - AIBOX Cảng Gia Vũ - Hải Phòng"
+EMAIL_SUBJECT_ALERT = "[CẢNH BÁO] Tài nguyên vượt ngưỡng - {hostname}"
 EMAIL_BODY_TEMPLATE = """
 <html><body style="font-family:Arial,sans-serif;color:#1f2937;">
 <h2 style="color:#b91c1c;">Cảnh báo tài nguyên vượt ngưỡng</h2>
@@ -104,7 +130,7 @@ EMAIL_BODY_TEMPLATE = """
 <p style="color:#b91c1c;font-weight:bold;">Vui lòng kiểm tra ngay.</p>
 </body></html>
 """
-CAMERA_DOWN_SUBJECT = "[CẢNH BÁO] Camera mất kết nối - AIBOX Cảng Gia Vũ - Hải Phòng"
+CAMERA_DOWN_SUBJECT = "[CẢNH BÁO] Camera mất kết nối - {hostname}"
 CAMERA_DOWN_BODY_TEMPLATE = """
 <html><body style="font-family:Arial,sans-serif;color:#1f2937;">
 <h2 style="color:#b91c1c;">Camera mất kết nối</h2>
@@ -117,7 +143,7 @@ CAMERA_DOWN_BODY_TEMPLATE = """
 <p style="color:#b91c1c;font-weight:bold;">Vui lòng kiểm tra ngay.</p>
 </body></html>
 """
-CAMERA_UP_SUBJECT = "[KHÔI PHỤC] Camera đã kết nối lại - AIBOX Cảng Gia Vũ - Hải Phòng"
+CAMERA_UP_SUBJECT = "[KHÔI PHỤC] Camera đã kết nối lại - {hostname}"
 CAMERA_UP_BODY_TEMPLATE = """
 <html><body style="font-family:Arial,sans-serif;color:#1f2937;">
 <h2 style="color:#15803d;">Camera đã kết nối lại</h2>
@@ -129,7 +155,7 @@ CAMERA_UP_BODY_TEMPLATE = """
 </table>
 </body></html>
 """
-BOOT_SUBJECT = "[THÔNG TIN] Máy vừa khởi động lại - AIBOX Cảng Gia Vũ - Hải Phòng"
+BOOT_SUBJECT = "[THÔNG TIN] Máy vừa khởi động lại - {hostname}"
 BOOT_BODY_TEMPLATE = """
 <html><body style="font-family:Arial,sans-serif;color:#1f2937;">
 <h2 style="color:#2563eb;">Máy vừa khởi động lại</h2>
@@ -141,7 +167,7 @@ BOOT_BODY_TEMPLATE = """
 </body></html>
 """
 
-STATUS_SUBJECT = "[BÁO CÁO] Trạng thái định kỳ - AIBOX Cảng Gia Vũ - Hải Phòng"
+STATUS_SUBJECT = "[BÁO CÁO] Trạng thái định kỳ - {hostname}"
 STATUS_BODY_TEMPLATE = """
 <html><body style="font-family:Arial,sans-serif;color:#1f2937;">
 <h2 style="color:#2563eb;">Báo cáo trạng thái định kỳ</h2>
